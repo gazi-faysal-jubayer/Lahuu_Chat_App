@@ -28,11 +28,15 @@ class _ChatPageState extends State<ChatPage> {
   late AuthService _authService;
   late DatabaseService _databaseService;
 
+  // Initialize ScrollController
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _authService = _getIt.get<AuthService>();
     _databaseService = _getIt.get<DatabaseService>();
+
     currentUser = ChatUser(
       id: _authService.user!.uid,
       firstName: _authService.user!.displayName,
@@ -42,31 +46,48 @@ class _ChatPageState extends State<ChatPage> {
       firstName: widget.chatUser.name,
       profileImage: widget.chatUser.pfpURL,
     );
+
+    print("Current User: ${currentUser?.firstName}, Other User: ${otherUser?.firstName}");
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.chatUser.name!,
-        ),
+        title: Text(widget.chatUser.name!),
       ),
       body: _buildUI(),
     );
   }
 
   Widget _buildUI() {
-    return StreamBuilder(
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _databaseService.getChatData(currentUser!.id, otherUser!.id),
       builder: (context, snapshot) {
-        Chat? chat = snapshot.data?.data();
-        List<ChatMessage> messages = [];
-        if (chat != null && chat.messages != null) {
-          messages = _generateChatMessagesList(
-            chat.messages!,
+        if (snapshot.hasError) {
+          print("Error loading chat: ${snapshot.error}");
+          return const Center(
+            child: Text("Error loading chat."),
           );
         }
+
+        if (!snapshot.hasData || snapshot.data?.data() == null) {
+          print("No chat data available");
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        // Convert snapshot data to Chat object
+        var chatData = snapshot.data!.data()!;
+        Chat chat = Chat.fromJson(chatData);
+
+        // Reverse messages to show latest at the bottom
+        List<ChatMessage> messages = _generateChatMessagesList(chat.messages!).reversed.toList();
+
+        // Scroll to bottom after data loads
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
         return DashChat(
           messageOptions: const MessageOptions(
             showOtherUsersAvatar: true,
@@ -91,17 +112,31 @@ class _ChatPageState extends State<ChatPage> {
       sentAt: Timestamp.fromDate(chatMessage.createdAt),
     );
     await _databaseService.sendChatMessage(
-        currentUser!.id, otherUser!.id, message);
+      currentUser!.id,
+      otherUser!.id,
+      message,
+    );
+
+    // Scroll to the bottom after sending the message
+    _scrollToBottom();
   }
 
   List<ChatMessage> _generateChatMessagesList(List<Message> messages) {
-    List<ChatMessage> chatMessages = messages.map((m) {
+    return messages.map((m) {
       return ChatMessage(
         user: m.senderID == currentUser!.id ? currentUser! : otherUser!,
         text: m.content!,
         createdAt: m.sentAt!.toDate(),
       );
     }).toList();
-    return chatMessages;
+  }
+
+  // Scroll to the bottom of the chat
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
   }
 }

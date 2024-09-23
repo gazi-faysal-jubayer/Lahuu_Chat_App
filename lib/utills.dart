@@ -37,8 +37,10 @@ Future<void> registerServices() async {
 }
 
 String generateChatID({required String uid1, required String uid2}) {
-  List uids = [uid1, uid2];
-  uids.sort();
-  String chatID = uids.fold("", (id, uid) => "$id$uid");
-  return chatID;
+  // Ensure that the same two users always generate the same chat ID
+  if (uid1.compareTo(uid2) > 0) {
+    return '$uid1-$uid2';
+  } else {
+    return '$uid2-$uid1';
+  }
 }

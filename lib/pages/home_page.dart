@@ -7,6 +7,8 @@ import 'package:lahuu_chat_app/services/auth_service.dart';
 import 'package:lahuu_chat_app/services/database_service.dart';
 import 'package:lahuu_chat_app/services/navigation_service.dart';
 import 'package:lahuu_chat_app/widgets/chat_tile.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -69,7 +71,7 @@ class _HomepageState extends State<Homepage> {
   }
 
   Widget _chatsList() {
-    return StreamBuilder(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _databaseService.getUserProfiles(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -82,7 +84,8 @@ class _HomepageState extends State<Homepage> {
             return ListView.builder(
                 itemCount: users.length,
                 itemBuilder: (context, index) {
-                  UserProfile user = users[index].data();
+                  UserProfile user = UserProfile.fromJson(
+                      users[index].data() as Map<String, dynamic>);
                   return Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: 5.0,
@@ -90,10 +93,11 @@ class _HomepageState extends State<Homepage> {
                     child: ChatTile(
                       userProfile: user,
                       onTap: () async {
+                        print("Selected User: ${user.name}, UID: ${user.uid}");
                         final chatExists = await _databaseService
                             .checkChatExists(_authService.user!.uid, user.uid!);
                         if (!chatExists) {
-                          await _databaseService.creatNewChat(
+                          await _databaseService.createNewChat(
                               _authService.user!.uid, user.uid!);
                         }
                         _navigationService.push(
